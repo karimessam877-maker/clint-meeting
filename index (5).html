@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Client Notepad</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Amiri&family=Cairo&family=Tajawal&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#ffffff; --bar:#eef1f4; --ink:#1b2630; --muted:#5d6b77; --line:#d3dbe1; --tab:#dde3e8; --accent:#0f6b73; --focus:#1a73e8; --bad:#c33;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#202124; --bar:#2b2c30; --ink:#e8eaed; --muted:#9aa0a6; --line:#3c3d41; --tab:#35363a; --accent:#6cc7d0; --focus:#7db3ff; --bad:#ff8a8d; }
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Arabic",sans-serif}
+:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+button{font:inherit;color:var(--ink);cursor:pointer}
+[hidden]{display:none!important}
+
+/* page 1 */
+#home{flex:1;overflow:auto;padding:32px 16px}
+.homebox{max-width:560px;margin:0 auto}
+.homebox h1{margin:0 0 14px;font:600 1.6rem/1.2 Georgia,"Times New Roman",serif}
+#search{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--bar);color:var(--ink);font:inherit;font-size:1.05rem}
+#list{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+.client{text-align:start;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:1.02rem}
+.client:hover{background:var(--tab)}
+.client.add{border-style:dashed;color:var(--accent);font-weight:600}
+.hint{color:var(--muted);margin:12px 2px}
+
+/* page 2 */
+#padview{flex:1;display:flex;flex-direction:column;min-height:0}
+#top{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:8px 12px;background:var(--bar);border-bottom:1px solid var(--line);flex:none}
+.sbtn{font-size:.85rem;background:transparent;border:1px solid var(--line);border-radius:6px;padding:4px 10px}
+.sbtn:hover{background:var(--tab)}
+select.sbtn{background:var(--bar);color:var(--ink);max-width:150px}
+.danger{color:var(--bad)}
+#clientBox{display:flex;gap:8px;align-items:center;min-width:0;flex:1 1 auto}
+#clientBox strong{font-size:1.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rename{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--accent);border-radius:6px;padding:5px 8px;width:200px}
+#tabs{display:flex;align-items:flex-end;gap:2px;padding:6px 8px 0;background:var(--bar);overflow-x:auto;flex:none}
+.tab,#add{border:0;background:transparent;padding:8px 14px;border-radius:8px 8px 0 0;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.tab:hover,#add:hover{background:var(--tab)}
+.tab[aria-selected="true"]{background:var(--bg);font-weight:600;box-shadow:inset 0 2px 0 var(--accent)}
+#add{font-size:1.2rem;padding:4px 12px}
+.rename.tabname{width:160px}
+#tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);flex:none}
+.sep{width:1px;height:22px;background:var(--line)}
+.swatch{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);padding:0}
+.swatch:hover{transform:scale(1.12)}
+#bold{font-weight:700;width:30px;padding:3px 0}
+#pad{flex:1;overflow:auto;padding:16px 18px;background:var(--bg);color:var(--ink);font:16px/1.7 Consolas,"SF Mono","Cascadia Mono",Menlo,monospace;outline:none;white-space:pre-wrap;overflow-wrap:anywhere}
+#pad:empty::before{content:attr(data-placeholder);color:var(--muted)}
+#pad[dir="auto"]{unicode-bidi:plaintext}
+#pad[dir="auto"] div,#pad[dir="auto"] p{unicode-bidi:plaintext}
+#status{display:flex;gap:20px;flex-wrap:wrap;padding:6px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:.8rem;flex:none;background:var(--bar)}
+#saved[data-bad]{color:var(--bad)}
+</style>
+</head>
+<body>
+
+<div id="home">
+  <div class="homebox">
+    <h1>Clients</h1>
+    <input id="search" type="text" autocomplete="off" dir="auto" aria-label="Search client" placeholder="Search client name...">
+    <div id="list" aria-live="polite"></div>
+  </div>
+</div>
+
+<div id="padview" hidden>
+  <div id="top">
+    <button type="button" class="sbtn" id="back">&larr; All clients</button>
+    <div id="clientBox"></div>
+    <button type="button" class="sbtn" id="renameClient">Rename client</button>
+    <button type="button" class="sbtn danger" id="delClient">Delete client</button>
+  </div>
+  <div id="tabs" role="tablist" aria-label="Notes"></div>
+  <div id="tools">
+    <button type="button" class="sbtn" id="rename">Rename tab</button>
+    <button type="button" class="sbtn" id="dir" title="Text direction for this tab">Direction: Auto</button>
+    <button type="button" class="sbtn danger" id="del">Delete tab</button>
+    <span class="sep" role="presentation"></span>
+    <select id="fontSel" class="sbtn" aria-label="Font"><option value="">Font</option></select>
+    <select id="sizeSel" class="sbtn" aria-label="Text size"><option value="">Size</option></select>
+    <span id="colors" role="group" aria-label="Text color" style="display:flex;gap:8px;align-items:center"></span>
+    <button type="button" class="sbtn" id="bold" aria-label="Bold" title="Bold">B</button>
+    <button type="button" class="sbtn" id="clearFmt" title="Back to the normal look: removes color, font, size and bold from the selected text">Clear</button>
+  </div>
+  <div id="pad" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="false" data-placeholder="Start typing here..."></div>
+  <div id="status"><span id="count">0 characters</span><span id="saved" role="status">Saved</span></div>
+</div>
+
+<script>
+(function(){
+  var KEY = 'notepadClients.v2', OLD = 'notepadTabs.v1';
+  var $ = function(id){ return document.getElementById(id); };
+  var $pad = $('pad'), $tabs = $('tabs'), $del = $('del'), $dir = $('dir'), $saved = $('saved');
+  var $search = $('search'), $list = $('list'), $clientBox = $('clientBox'), $delClient = $('delClient');
+  var DIRS = ['auto', 'rtl', 'ltr'], DIR_LABEL = { auto: 'Auto', rtl: 'Right to left', ltr: 'Left to right' };
+  var COLORS = [['Red', '#e5484d'], ['Orange', '#f08a24'], ['Green', '#2fa84f'], ['Blue', '#3b82f6'], ['Purple', '#a05cf0'], ['Pink', '#e255a1']];
+  var state = load(), route = parse(location.hash), clientId = null;
+  var renamingTab = null, renamingClient = false, confirmDel = false, confirmDelClient = false;
+  var delTimer = null, delClientTimer = null, saveTimer = null;
+
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function defaultTabs(){ return ['Questions', 'Research', 'Action plan'].map(function(n){ return { id: uid(), title: n, html: '', dir: 'auto' }; }); }
+  function load(){
+    try {
+      var d = JSON.parse(localStorage.getItem(KEY));
+      if (d && Array.isArray(d.clients)) {
+        d.clients.forEach(function(c){
+          if (!c.tabs || !c.tabs.length) c.tabs = defaultTabs();
+          if (!c.tabs.some(function(t){ return t.id === c.active; })) c.active = c.tabs[0].id;
+        });
+        return { clients: d.clients };
+      }
+    } catch (e) {}
+    try { // bring over notes from the first version of this page
+      var o = JSON.parse(localStorage.getItem(OLD));
+      if (o && Array.isArray(o.tabs) && o.tabs.length) return { clients: [{ id: uid(), name: 'My notes', tabs: o.tabs, active: o.active || o.tabs[0].id }] };
+    } catch (e) {}
+    return { clients: [] };
+  }
+  function find(id){ return state.clients.filter(function(c){ return c.id === id; })[0]; }
+  function C(){ return find(clientId); }
+  function cur(){ var c = C(); return c.tabs.filter(function(t){ return t.id === c.active; })[0]; }
+  function setSaved(ok, msg){ $saved.textContent = msg; if (ok) $saved.removeAttribute('data-bad'); else $saved.setAttribute('data-bad', ''); }
+  function save(){
+    clearTimeout(saveTimer);
+    try { localStorage.setItem(KEY, JSON.stringify(state)); setSaved(true, 'Saved'); }
+    catch (e) { setSaved(false, 'Not saved: storage is blocked here. Open the file directly in your browser.'); }
+  }
+  function scheduleSave(){ setSaved(true, 'Saving...'); clearTimeout(saveTimer); saveTimer = setTimeout(save, 300); }
+  function el(tag, attrs, text){
+    var n = document.createElement(tag);
+    for (var k in (attrs || {})) n.setAttribute(k, attrs[k]);
+    if (text !== undefined) n.textContent = text;
+    return n;
+  }
+
+  /* ---------- safe rich text: only line breaks, bold, italic, underline and text color survive ---------- */
+  var OKTAG = { DIV: 1, P: 1, BR: 1, SPAN: 1, B: 1, STRONG: 1, I: 1, EM: 1, U: 1, FONT: 1 };
+  var FONTS = [['Arial', 'Arial, Helvetica, sans-serif'], ['Tahoma', 'Tahoma, Geneva, sans-serif'], ['Verdana', 'Verdana, Geneva, sans-serif'],
+    ['Segoe UI', '"Segoe UI", system-ui, sans-serif'], ['Times New Roman', '"Times New Roman", Times, serif'], ['Georgia', 'Georgia, serif'],
+    ['Courier New', '"Courier New", monospace'], ['Consolas', 'Consolas, "Courier New", monospace'],
+    ['Cairo', 'Cairo, Tahoma, sans-serif'], ['Tajawal', 'Tajawal, Tahoma, sans-serif'], ['Amiri', 'Amiri, "Times New Roman", serif']];
+  var FONTMAP = {}; FONTS.forEach(function(f){ FONTMAP[f[0].toLowerCase()] = f[1]; });
+  var SIZES = [['Small', '2'], ['Normal', '3'], ['Large', '5'], ['Huge', '6']];
+  var SIZEKW = ['', 'x-small', 'small', 'medium', 'large', 'x-large', 'xx-large'];
+  var MARK = 'rgb(1, 2, 3)'; // temporary color used to mean "back to the normal color"
+  var COLOR_RE = /^(#[0-9a-f]{3,8}|rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*(,\s*[\d.]+\s*)?\)|[a-z]{3,20})$/i;
+  function clean(html){
+    var src = new DOMParser().parseFromString('<body>' + html + '</body>', 'text/html').body;
+    var out = document.createElement('div');
+    (function walk(from, to){
+      Array.prototype.forEach.call(from.childNodes, function(n){
+        if (n.nodeType === 3) { to.appendChild(document.createTextNode(n.nodeValue)); return; }
+        if (n.nodeType !== 1 || n.tagName === 'SCRIPT' || n.tagName === 'STYLE') return;
+        if (!OKTAG[n.tagName]) { walk(n, to); return; }
+        var e = document.createElement(n.tagName.toLowerCase());
+        var col = (n.style && n.style.color) || (n.tagName === 'FONT' && n.getAttribute('color')) || '';
+        if (col && COLOR_RE.test(col) && col.replace(/\s/g, '') !== MARK.replace(/\s/g, '')) e.style.color = col;
+        var ff = (n.style && n.style.fontFamily) || (n.tagName === 'FONT' && n.getAttribute('face')) || '';
+        var fam = FONTMAP[String(ff).split(',')[0].replace(/["']/g, '').trim().toLowerCase()];
+        if (fam) e.style.fontFamily = fam;
+        var sz = (n.style && n.style.fontSize) || (n.tagName === 'FONT' && SIZEKW[+n.getAttribute('size')]) || '';
+        if (SIZEKW.indexOf(sz) > 0) e.style.fontSize = sz;
+        if (n.style && (n.style.fontWeight === 'bold' || +n.style.fontWeight >= 600)) e.style.fontWeight = 'bold';
+        if ((n.tagName === 'SPAN' || n.tagName === 'FONT') && !e.getAttribute('style')) { walk(n, to); return; }
+        walk(n, e); to.appendChild(e);
+      });
+    })(src, out);
+    return out.innerHTML;
+  }
+  function plainToHtml(text){
+    var d = document.createElement('div');
+    String(text || '').split('\n').forEach(function(line, i){ if (i) d.appendChild(document.createElement('br')); d.appendChild(document.createTextNode(line)); });
+    return d.innerHTML;
+  }
+  function tabHtml(t){ return clean(t.html !== undefined ? t.html : plainToHtml(t.text)); }
+
+  /* ---------- routing: '' = search page, 'c/ID' = notepad ---------- */
+  function parse(h){ return (h || '').replace(/^#/, ''); }
+  function go(r){
+    flush();
+    route = r; try { if (parse(location.hash) !== r) location.hash = r; } catch (e) {}
+    render();
+  }
+  window.addEventListener('hashchange', function(){ var r = parse(location.hash); if (r !== route) { flush(); route = r; render(); } });
+  function flush(){ if (saveTimer) save(); }
+  function render(){
+    var m = route.split('/'), c = m[0] === 'c' && m[1] ? find(m[1]) : null;
+    renamingTab = null; renamingClient = false;
+    if (c) { clientId = c.id; $('home').hidden = true; $('padview').hidden = false; renderPadView(); }
+    else { clientId = null; route = ''; $('padview').hidden = true; $('home').hidden = false; renderHome(); }
+  }
+
+  /* ---------- page 1: search ---------- */
+  function addClient(name){
+    var t = defaultTabs(), c = { id: uid(), name: name, tabs: t, active: t[0].id };
+    state.clients.push(c); save(); $search.value = ''; go('c/' + c.id);
+  }
+  function renderHome(){
+    var raw = $search.value.trim(), q = raw.toLowerCase();
+    var vis = state.clients.filter(function(c){ return !q || c.name.toLowerCase().indexOf(q) !== -1; })
+      .sort(function(a, b){ return a.name.localeCompare(b.name); });
+    $list.textContent = '';
+    vis.forEach(function(c){
+      var b = el('button', { type: 'button', class: 'client', dir: 'auto' }, c.name);
+      b.addEventListener('click', function(){ $search.value = ''; go('c/' + c.id); });
+      $list.appendChild(b);
+    });
+    if (q && !state.clients.some(function(c){ return c.name.toLowerCase() === q; })) {
+      var a = el('button', { type: 'button', class: 'client add' }, 'Add \u201c' + raw + '\u201d as a new client');
+      a.addEventListener('click', function(){ addClient(raw); });
+      $list.appendChild(a);
+    }
+    if (!vis.length && !q) $list.appendChild(el('p', { class: 'hint' }, 'No clients yet. Type a name above to add your first client.'));
+    if (!vis.length && q) $list.insertBefore(el('p', { class: 'hint' }, 'No client with that name.'), $list.firstChild);
+  }
+  $search.addEventListener('input', renderHome);
+  $search.addEventListener('keydown', function(e){
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    var first = $list.querySelector('.client'); if (first) first.click();
+  });
+
+  /* ---------- page 2: client header ---------- */
+  function renderClientBox(){
+    var c = C(); $clientBox.textContent = '';
+    if (renamingClient) {
+      var inp = el('input', { class: 'rename', 'aria-label': 'Client name', maxlength: '60', dir: 'auto' });
+      inp.value = c.name;
+      var done = false;
+      var commit = function(ok){
+        if (done) return; done = true;
+        var v = inp.value.trim();
+        var dup = state.clients.some(function(x){ return x.id !== c.id && x.name.toLowerCase() === v.toLowerCase(); });
+        if (ok && v && !dup) c.name = v;
+        renamingClient = false; save(); renderClientBox();
+        if (ok && dup) setSaved(false, 'Another client already has that name.');
+      };
+      inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); commit(true); } if (e.key === 'Escape') commit(false); });
+      inp.addEventListener('blur', function(){ commit(true); });
+      $clientBox.appendChild(inp);
+      setTimeout(function(){ inp.focus(); inp.select(); }, 0);
+    } else {
+      $clientBox.appendChild(el('strong', { dir: 'auto' }, c.name));
+    }
+  }
+  $('back').addEventListener('click', function(){ go(''); });
+  $('renameClient').addEventListener('click', function(){ renamingClient = true; renderClientBox(); });
+  function resetDelClient(){ confirmDelClient = false; clearTimeout(delClientTimer); $delClient.textContent = 'Delete client'; }
+  $delClient.addEventListener('click', function(){
+    if (!confirmDelClient) { confirmDelClient = true; $delClient.textContent = 'Click again to delete this client'; delClientTimer = setTimeout(resetDelClient, 3000); return; }
+    state.clients = state.clients.filter(function(x){ return x.id !== clientId; });
+    save(); go('');
+  });
+
+  /* ---------- page 2: tabs ---------- */
+  function renderTabs(){
+    var c = C(); $tabs.textContent = '';
+    c.tabs.forEach(function(t){
+      if (renamingTab === t.id) {
+        var inp = el('input', { class: 'rename tabname', 'aria-label': 'Tab name', maxlength: '40', dir: 'auto' });
+        inp.value = t.title;
+        var done = false;
+        var commit = function(ok){
+          if (done) return; done = true;
+          var v = inp.value.trim();
+          if (ok && v) t.title = v;
+          renamingTab = null; save(); renderTabs(); $pad.focus();
+        };
+        inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); commit(true); } if (e.key === 'Escape') commit(false); });
+        inp.addEventListener('blur', function(){ commit(true); });
+        $tabs.appendChild(inp);
+        setTimeout(function(){ inp.focus(); inp.select(); }, 0);
+      } else {
+        var b = el('button', { type: 'button', class: 'tab', role: 'tab', 'aria-selected': String(t.id === c.active), tabindex: t.id === c.active ? '0' : '-1', dir: 'auto' }, t.title);
+        b.addEventListener('click', function(){ switchTo(t.id); });
+        b.addEventListener('dblclick', startRename);
+        $tabs.appendChild(b);
+      }
+    });
+    var add = el('button', { type: 'button', id: 'add', 'aria-label': 'New tab', title: 'New tab' }, '+');
+    add.addEventListener('click', function(){
+      var t = { id: uid(), title: 'New tab', html: '', dir: 'auto' };
+      c.tabs.push(t); c.active = t.id; save(); renamingTab = t.id; renderPadView();
+    });
+    $tabs.appendChild(add);
+  }
+  function loadPad(){
+    var t = cur();
+    savedRange = null;
+    $pad.innerHTML = tabHtml(t);
+    $pad.setAttribute('dir', t.dir || 'auto');
+    $pad.setAttribute('aria-label', t.title);
+    $dir.textContent = 'Direction: ' + DIR_LABEL[t.dir || 'auto'];
+    updateCount();
+  }
+  function resetDel(){ confirmDel = false; clearTimeout(delTimer); $del.textContent = 'Delete tab'; }
+  function renderPadView(){ renderClientBox(); resetDel(); resetDelClient(); renderTabs(); loadPad(); }
+  function switchTo(id){
+    var c = C();
+    if (id === c.active) { $pad.focus(); return; }
+    flush(); c.active = id; renamingTab = null; save(); renderPadView(); $pad.focus();
+  }
+  function startRename(){ renamingTab = C().active; renderTabs(); }
+  function updateCount(){ $('count').textContent = $pad.textContent.length + ' characters'; }
+
+  /* ---------- page 2: editor ---------- */
+  $pad.addEventListener('input', function(){
+    if (!$pad.textContent.trim() && !$pad.querySelector('div,p,span,b,i,u')) $pad.innerHTML = '';
+    stripMarker();
+    var t = cur(); t.html = clean($pad.innerHTML); t.text = $pad.textContent;
+    updateCount(); scheduleSave();
+  });
+  $pad.addEventListener('paste', function(e){ // paste as plain text so nothing odd comes in
+    e.preventDefault();
+    var txt = (e.clipboardData || window.clipboardData).getData('text');
+    document.execCommand('insertText', false, txt);
+  });
+  var savedRange = null;
+  document.addEventListener('selectionchange', function(){
+    try { var s = window.getSelection(); if (s.rangeCount && $pad.contains(s.anchorNode)) savedRange = s.getRangeAt(0).cloneRange(); } catch (e) {}
+  });
+  function stripMarker(){
+    Array.prototype.forEach.call($pad.querySelectorAll('[style],font[color]'), function(n){
+      if (n.style && n.style.color.replace(/\s/g, '') === MARK.replace(/\s/g, '')) {
+        n.style.removeProperty('color');
+        if (!n.getAttribute('style')) n.removeAttribute('style');
+      }
+    });
+  }
+  function fmt(cmd, val){
+    $pad.focus();
+    try {
+      if (savedRange && $pad.contains(savedRange.commonAncestorContainer)) { var s = window.getSelection(); s.removeAllRanges(); s.addRange(savedRange); }
+    } catch (e) {}
+    try { document.execCommand('styleWithCSS', false, true); document.execCommand(cmd, false, val); } catch (e) {}
+    $pad.dispatchEvent(new Event('input'));
+  }
+  var $fontSel = $('fontSel'), $sizeSel = $('sizeSel');
+  FONTS.forEach(function(f){ var o = el('option', { value: f[0] }, f[0]); o.style.fontFamily = f[1]; $fontSel.appendChild(o); });
+  SIZES.forEach(function(z){ $sizeSel.appendChild(el('option', { value: z[1] }, z[0])); });
+  $fontSel.addEventListener('change', function(){ if ($fontSel.value) fmt('fontName', $fontSel.value); $fontSel.value = ''; });
+  $sizeSel.addEventListener('change', function(){ if ($sizeSel.value) fmt('fontSize', $sizeSel.value); $sizeSel.value = ''; });
+  var $colors = $('colors');
+  var dflt = el('button', { type: 'button', class: 'swatch', 'aria-label': 'Normal text color', title: 'Normal color', style: 'background:var(--ink)' });
+  dflt.addEventListener('mousedown', function(e){ e.preventDefault(); });
+  dflt.addEventListener('click', function(){ fmt('foreColor', MARK); });
+  $colors.appendChild(dflt);
+  COLORS.forEach(function(p){
+    var b = el('button', { type: 'button', class: 'swatch', 'aria-label': p[0] + ' text', title: p[0], style: 'background:' + p[1] });
+    b.addEventListener('mousedown', function(e){ e.preventDefault(); });
+    b.addEventListener('click', function(){ fmt('foreColor', p[1]); });
+    $colors.appendChild(b);
+  });
+  ['bold', 'clearFmt'].forEach(function(id){ $(id).addEventListener('mousedown', function(e){ e.preventDefault(); }); });
+  $('bold').addEventListener('click', function(){ fmt('bold'); });
+  $('clearFmt').addEventListener('click', function(){ fmt('removeFormat'); fmt('foreColor', MARK); });
+
+  $('rename').addEventListener('click', startRename);
+  $dir.addEventListener('click', function(){
+    var t = cur(); t.dir = DIRS[(DIRS.indexOf(t.dir || 'auto') + 1) % DIRS.length];
+    save(); loadPad(); $pad.focus();
+  });
+  $del.addEventListener('click', function(){
+    if (!confirmDel) { confirmDel = true; $del.textContent = 'Click again to delete'; delTimer = setTimeout(resetDel, 3000); return; }
+    var c = C(), i = c.tabs.indexOf(cur());
+    c.tabs.splice(i, 1);
+    if (!c.tabs.length) c.tabs.push({ id: uid(), title: 'Notes', html: '', dir: 'auto' });
+    c.active = c.tabs[Math.min(i, c.tabs.length - 1)].id;
+    save(); renderPadView(); $pad.focus();
+  });
+  $tabs.addEventListener('keydown', function(e){
+    if ((e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') || e.target.tagName === 'INPUT') return;
+    var c = C(), i = c.tabs.indexOf(cur()), n = c.tabs.length;
+    i = (i + (e.key === 'ArrowRight' ? 1 : -1) + n) % n;
+    switchTo(c.tabs[i].id);
+    var sel = $tabs.querySelector('[aria-selected="true"]'); if (sel) sel.focus();
+  });
+  window.addEventListener('pagehide', save);
+  document.addEventListener('visibilitychange', function(){ if (document.hidden) save(); });
+
+  render();
+  if (!clientId) $search.focus();
+})();
+</script>
+</body>
+</html>
